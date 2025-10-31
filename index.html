@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LSTM Weather Predictor 🌦️</title>
+
+  <!-- Leaflet Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body {
+      font-family: "Poppins", Arial, sans-serif;
+      background: linear-gradient(135deg, #2980b9, #6dd5fa);
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    #map {
+      height: 400px;
+      width: 80%;
+      margin: 20px auto;
+      border-radius: 15px;
+      box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .card {
+      width: 85%;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 20px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s;
+    }
+
+    .card:hover {
+      transform: scale(1.01);
+    }
+
+    button {
+      padding: 12px 24px;
+      background: linear-gradient(90deg, #27ae60, #2ecc71);
+      color: white;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: linear-gradient(90deg, #2ecc71, #27ae60);
+      transform: scale(1.05);
+    }
+
+    table {
+      margin: 20px auto;
+      background: rgba(255,255,255,0.2);
+      border-collapse: collapse;
+      border-radius: 8px;
+      overflow: hidden;
+      width: 80%;
+    }
+
+    th, td {
+      padding: 10px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+    }
+
+    th {
+      background-color: rgba(255,255,255,0.3);
+    }
+
+    .avg-temp {
+      margin-top: 15px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #ffeaa7;
+    }
+
+    #loading {
+      font-size: 18px;
+      color: #fff;
+      animation: blink 1.5s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <h1>🌦️ LSTM Weather Predictor</h1>
+  <p>Click on any location on the map to get its 5-hour temperature forecast.</p>
+
+  <div id="map"></div>
+
+  <div class="card">
+    <p id="coords">📍 Latitude: <span id="lat">16.5062</span>, Longitude: <span id="lon">80.6480</span></p>
+    <button onclick="getForecast()">Get 5-Hour Forecast</button>
+    <div class="output" id="output"></div>
+  </div>
+
+  <script>
+    // 🌍 Initialize map
+    const map = L.map('map').setView([16.5062, 80.6480], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker = L.marker([16.5062, 80.6480]).addTo(map);
+
+    // 🖱️ On map click, update marker and coordinates
+    map.on('click', function(e) {
+      const { lat, lng } = e.latlng;
+      document.getElementById('lat').innerText = lat.toFixed(4);
+      document.getElementById('lon').innerText = lng.toFixed(4);
+      marker.setLatLng([lat, lng]);
+    });
+
+    // ⚡ Fetch prediction from Hugging Face Space backend
+    async function getForecast() {
+      document.getElementById('output').innerHTML = '<p id="loading">Fetching data and running LSTM model... ⏳</p>';
+
+      const lat = document.getElementById('lat').innerText;
+      const lon = document.getElementById('lon').innerText;
+
+      // ✅ Hugging Face Space API endpoint
+      const HF_API_ENDPOINT = 'https://chandramoulibandaru02-temperature-prediction-lstm.hf.space/predict_lstm';
+
+      try {
+        const response = await fetch(HF_API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat: lat, lon: lon })
+        });
+
+        if (!response.ok) {
+          document.getElementById('output').innerHTML =
+            `<p style="color:red;">❌ Network Error: Unable to reach Hugging Face model (Status ${response.status}).</p>`;
+          return;
+        }
+
+        const result = await response.json();
+
+        if (result.error) {
+          document.getElementById('output').innerHTML = `<p style="color:red;">⚠️ Error: ${result.error}</p>`;
+          return;
+        }
+
+        // --- Display predictions ---
+        let table = '<table><tr><th>Time</th><th>Predicted Temperature (°C)</th></tr>';
+        let total = 0;
+
+        for (let i = 0; i < result.predictions.length; i++) {
+          const temp = result.predictions[i];
+          total += temp;
+          table += `<tr><td>${result.times ? result.times[i] : i + 1}</td><td>${temp.toFixed(2)}</td></tr>`;
+        }
+        table += '</table>';
+
+        const avgTemp = (total / result.predictions.length).toFixed(2);
+
+        document.getElementById('output').innerHTML = `
+          <h3>✅ Forecast Complete</h3>
+          ${table}
+          <div class="avg-temp">🌡️ Average Predicted Temperature: ${avgTemp} °C</div>
+        `;
+      } catch (error) {
+        document.getElementById('output').innerHTML = `<p style="color:red;">⚠️ Error: ${error.message}</p>`;
+      }
+    }
+  </script>
+</body>
+</html>
