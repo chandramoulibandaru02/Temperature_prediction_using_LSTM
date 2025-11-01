@@ -133,57 +133,67 @@
     // ⚡ Fetch prediction from Hugging Face Space backend
     async function getForecast() {
       document.getElementById('output').innerHTML = '<p id="loading">Fetching data and running LSTM model... ⏳</p>';
-
-      const lat = document.getElementById('lat').innerText;
-      const lon = document.getElementById('lon').innerText;
-
-      // ✅ Hugging Face Space API endpoint
+    
+      const lat = parseFloat(document.getElementById('lat').innerText);  // ✅ Convert to number
+      const lon = parseFloat(document.getElementById('lon').innerText);  // ✅ Convert to number
+    
+      // ✅ Add trailing slash to match Flask route
       const HF_API_ENDPOINT = 'https://chandramoulibandaru02-temperature-prediction-lstm.hf.space/api/predict_lstm/';
-
+    
       try {
         const response = await fetch(HF_API_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lat: lat, lon: lon })
         });
-
+    
+        console.log('Response Status:', response.status); // ✅ Debug log
+        console.log('Response URL:', response.url);       // ✅ Check if redirected
+    
         if (!response.ok) {
+          const errorText = await response.text(); // ✅ Get error details
+          console.error('Error Response:', errorText);
           document.getElementById('output').innerHTML =
-            `<p style="color:red;">❌ Network Error: Unable to reach Hugging Face model (Status ${response.status}).</p>`;
+            `<p style="color:red;">❌ Error ${response.status}: ${errorText}</p>`;
           return;
         }
-
+    
         const result = await response.json();
-
+        console.log('Result:', result); // ✅ Debug log
+    
         if (result.error) {
           document.getElementById('output').innerHTML = `<p style="color:red;">⚠️ Error: ${result.error}</p>`;
           return;
         }
-
+    
         // --- Display predictions ---
         let table = '<table><tr><th>Time</th><th>Predicted Temperature (°C)</th></tr>';
         let total = 0;
-
+    
         for (let i = 0; i < result.predictions.length; i++) {
           const temp = result.predictions[i];
           total += temp;
           table += `<tr><td>${result.times ? result.times[i] : i + 1}</td><td>${temp.toFixed(2)}</td></tr>`;
         }
         table += '</table>';
-
+    
         const avgTemp = (total / result.predictions.length).toFixed(2);
-
+    
         document.getElementById('output').innerHTML = `
           <h3>✅ Forecast Complete</h3>
           ${table}
           <div class="avg-temp">🌡️ Average Predicted Temperature: ${avgTemp} °C</div>
         `;
       } catch (error) {
-        document.getElementById('output').innerHTML = `<p style="color:red;">⚠️ Error: ${error.message}</p>`;
-      }
+        console.error('Fetch Error:', error); // ✅ Debug log
+        document.getElementById('output').innerHTML = 
+          `<p style="color:red;">⚠️ Connection Error: ${error.message}<br>
+          Make sure the Hugging Face Space is running.</p>`;
     }
+  }
   </script>
 </body>
 </html>
+
 
 
